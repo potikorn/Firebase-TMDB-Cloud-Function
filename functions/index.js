@@ -1,4 +1,6 @@
 const functions = require('firebase-functions');
+const http = require('http');
+const url = require('url');
 
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
@@ -47,4 +49,30 @@ exports.onUserCreate = functions.auth.user().onCreate((user) => {
 
 exports.onUserDelete = functions.auth.user().onDelete((user) => {
     return admin.database().ref('/tmdb-user/' + user.uid).remove();
-})
+});
+
+exports.getRatedMovie = functions.https.onRequest((req, res) => {
+    var ref = admin.database().ref('/tmdb-user/m1AMwKklL6XILvnmAl0JEvJxgcX2').child("rated-movie");
+    ref.once("value", (snapshot) => {
+        var object = {};
+        object["rated-movie"] = snapshot.val();
+        res.contentType('application/json');
+        res.send(JSON.stringify(object));
+    });
+});
+
+exports.ratedMovie = functions.https.onRequest((req, res) => {
+    if (req.method === "GET") {
+        var q = url.parse(req.url, true).query;
+        var uid = q.uid;
+        var movieId = q.movieId;
+        return admin.database().ref('/tmdb-user/' + uid).child("rated-movie").once("value", snapshot => {
+            if (snapshot.val() === movieId) {
+                snapshot.remove();
+            }
+            snapshot.push({
+                movieId: movieId
+            });
+        });
+    }
+});
