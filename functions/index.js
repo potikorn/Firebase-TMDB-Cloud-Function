@@ -1,6 +1,16 @@
+/*jshint esversion: 6 */
+
 const functions = require('firebase-functions');
 const http = require('http');
 const url = require('url');
+const express = require('express');
+const app = express();
+const bodyParser = require('body-parser');
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({
+    extended: true
+}));
 
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
@@ -61,18 +71,44 @@ exports.getRatedMovie = functions.https.onRequest((req, res) => {
     });
 });
 
-exports.ratedMovie = functions.https.onRequest((req, res) => {
-    if (req.method === "GET") {
-        var q = url.parse(req.url, true).query;
-        var uid = q.uid;
-        var movieId = q.movieId;
-        return admin.database().ref('/tmdb-user/' + uid).child("rated-movie").once("value", snapshot => {
-            if (snapshot.val() === movieId) {
-                snapshot.remove();
+app.put('/rate-movie', (req, res) => {
+    var uid;
+    uid = req.header('uid');
+    if (uid === undefined) {
+        return res.status(404).end('Error: Unauthorized');
+    } else {
+        var json = req.body;
+        var db = admin.database().ref('/tmdb-user/' + uid).child("rated-movie");
+        var isDeleted = false;
+        db.once("value", (snapshot) => {
+            if (snapshot.numChildren() === 0) {
+                db.push({
+                    movieId: json.movieId,
+                    movieName: json.movieName
+                });
+            } else {
+                snapshot.forEach((data) => {
+                    if (data.child("movieId").val() === json.movieId) {
+                        data.ref.remove();
+                        isDeleted = true;
+                        res.status(200).end("Deleted favorite sucess.");
+                    }
+                });
+                if (isDeleted === false) {
+                    db.push({
+                        movieId: json.movieId,
+                        movieName: json.movieName
+                    });
+                    res.status(200).json(json).end();
+                }
             }
-            snapshot.push({
-                movieId: movieId
-            });
+            console.log("There are " + snapshot.numChildren() + " items");
         });
+        // db.push({
+        //     movieId: json.movieId,
+        //     movieName: json.movieName
+        // });
     }
 });
+
+exports.api = functions.https.onRequest(app);
