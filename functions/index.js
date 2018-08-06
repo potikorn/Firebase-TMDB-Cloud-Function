@@ -71,44 +71,52 @@ exports.getRatedMovie = functions.https.onRequest((req, res) => {
     });
 });
 
-app.put('/rate-movie', (req, res) => {
+app.put('/favorite-movie', (req, res) => {
     var uid;
     uid = req.header('uid');
     if (uid === undefined) {
-        return res.status(404).end('Error: Unauthorized');
+        res.status(401).end('Error: Unauthorized');
     } else {
         var json = req.body;
-        var db = admin.database().ref('/tmdb-user/' + uid).child("rated-movie");
+        var movieId = json.id;
+        var movieTitle = json.title;
+        var db = admin.database().ref('/tmdb-user/' + uid).child("favorite-movie");
         var isDeleted = false;
         db.once("value", (snapshot) => {
             if (snapshot.numChildren() === 0) {
                 db.push({
-                    movieId: json.movieId,
-                    movieName: json.movieName
+                    id: movieId,
+                    title: movieTitle
                 });
             } else {
                 snapshot.forEach((data) => {
-                    if (data.child("movieId").val() === json.movieId) {
+                    if (data.child("id").val() === movieId) {
                         data.ref.remove();
                         isDeleted = true;
-                        res.status(200).end("Deleted favorite sucess.");
+                        // res.status(200).end("Deleted favorite success.");
+                        res.status(200).json(setBaseResponse(true, "Deleted favorite success.", json)).end();
                     }
                 });
                 if (isDeleted === false) {
                     db.push({
-                        movieId: json.movieId,
-                        movieName: json.movieName
+                        id: movieId,
+                        title: movieTitle
                     });
-                    res.status(200).json(json).end();
+                    // res.status(200).end("Created favorite success.");
+                    res.status(200).json(setBaseResponse(true, "Created favorite success.", json)).end();
                 }
             }
-            console.log("There are " + snapshot.numChildren() + " items");
         });
-        // db.push({
-        //     movieId: json.movieId,
-        //     movieName: json.movieName
-        // });
     }
 });
+
+function setBaseResponse(isSuccessful, msg, json) {
+    var baseJson = {
+        "success": isSuccessful,
+        "message": msg,
+        "data": json
+    };
+    return baseJson;
+}
 
 exports.api = functions.https.onRequest(app);
