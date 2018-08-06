@@ -1,4 +1,16 @@
+/*jshint esversion: 6 */
+
 const functions = require('firebase-functions');
+const http = require('http');
+const url = require('url');
+const express = require('express');
+const app = express();
+const bodyParser = require('body-parser');
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({
+    extended: true
+}));
 
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
@@ -47,4 +59,64 @@ exports.onUserCreate = functions.auth.user().onCreate((user) => {
 
 exports.onUserDelete = functions.auth.user().onDelete((user) => {
     return admin.database().ref('/tmdb-user/' + user.uid).remove();
-})
+});
+
+exports.getRatedMovie = functions.https.onRequest((req, res) => {
+    var ref = admin.database().ref('/tmdb-user/m1AMwKklL6XILvnmAl0JEvJxgcX2').child("rated-movie");
+    ref.once("value", (snapshot) => {
+        var object = {};
+        object["rated-movie"] = snapshot.val();
+        res.contentType('application/json');
+        res.send(JSON.stringify(object));
+    });
+});
+
+app.put('/favorite-movie', (req, res) => {
+    var uid;
+    uid = req.header('uid');
+    if (uid === undefined) {
+        res.status(401).end('Error: Unauthorized');
+    } else {
+        var json = req.body;
+        var movieId = json.id;
+        var movieTitle = json.title;
+        var db = admin.database().ref('/tmdb-user/' + uid).child("favorite-movie");
+        var isDeleted = false;
+        db.once("value", (snapshot) => {
+            if (snapshot.numChildren() === 0) {
+                db.push({
+                    id: movieId,
+                    title: movieTitle
+                });
+            } else {
+                snapshot.forEach((data) => {
+                    if (data.child("id").val() === movieId) {
+                        data.ref.remove();
+                        isDeleted = true;
+                        // res.status(200).end("Deleted favorite success.");
+                        res.status(200).json(setBaseResponse(true, "Deleted favorite success.", json)).end();
+                    }
+                });
+                if (isDeleted === false) {
+                    db.push({
+                        id: movieId,
+                        title: movieTitle
+                    });
+                    // res.status(200).end("Created favorite success.");
+                    res.status(200).json(setBaseResponse(true, "Created favorite success.", json)).end();
+                }
+            }
+        });
+    }
+});
+
+function setBaseResponse(isSuccessful, msg, json) {
+    var baseJson = {
+        "success": isSuccessful,
+        "message": msg,
+        "data": json
+    };
+    return baseJson;
+}
+
+exports.api = functions.https.onRequest(app);
